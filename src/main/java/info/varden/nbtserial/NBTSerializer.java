@@ -19,7 +19,17 @@ import net.minecraft.nbt.NBTTagLong;
 import net.minecraft.nbt.NBTTagShort;
 import net.minecraft.nbt.NBTTagString;
 
+/**
+ * <p>A class for serializing classes to NBT format. Serializable classes must implement {@link INBTSerializable} in
+ * order to be serialized to NBT format. This class will serialize all fields in the given object that are annotated
+ * with {@link NBTSerialize}.</p>
+ * 
+ * @author Marius
+ */
 public class NBTSerializer {
+	/*
+	 * Minecraft NBT tag IDs.
+	 */
 	public static final int NBT_TAG_END = 0;
 	public static final int NBT_TAG_BYTE = 1;
 	public static final int NBT_TAG_SHORT = 2;
@@ -33,7 +43,16 @@ public class NBTSerializer {
 	public static final int NBT_TAG_COMPOUND = 10;
 	public static final int NBT_TAG_INT_ARRAY = 11;
 	
-	public static final <T extends INBTSerializable> NBTTagCompound serialize(T object) throws IllegalArgumentException, IllegalAccessException, InstantiationException {
+	/**
+	 * <p>Serializes the given {@link INBTSerializable} instance to an NBT data structure.</p>
+	 * <p><b>Note:</b> null values will not be serialized.</p>
+	 * 
+	 * @param object An {@link INBTSerializable} instance.
+	 * @return The given instance represented as a serialized NBT data structure.
+	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
+	 * Java language access control and the underlying field is inaccessible.
+	 */
+	public static final <T extends INBTSerializable> NBTTagCompound serialize(T object) throws IllegalAccessException {
 		NBTTagCompound t = new NBTTagCompound();
 		Class<?> definition = object.getClass();
 		Field[] df = definition.getDeclaredFields();
@@ -68,7 +87,15 @@ public class NBTSerializer {
 		return t;
 	}
 	
-	private static <T> NBTTagList serializeList(List<T> list) throws InstantiationException, IllegalAccessException {
+	/**
+	 * <p>Serializes the given {@link List} instance to an NBT list structure.</p>
+	 * 
+	 * @param list A {@link List} instance.
+	 * @return The given instance represented as a serialized NBT list structure.
+	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
+	 * Java language access control and the underlying field is inaccessible.
+	 */
+	private static <T> NBTTagList serializeList(List<T> list) throws IllegalAccessException {
 		NBTTagList c = new NBTTagList();
 		if (list.size() <= 0) return c;
 		Class<?> subclass = list.get(0).getClass();
@@ -91,7 +118,26 @@ public class NBTSerializer {
 		return c;
 	}
 	
-	public static final <T extends INBTSerializable> T deserialize(Class<T> definition, NBTTagCompound data) throws IllegalArgumentException, IllegalAccessException, InstantiationException {
+	/**
+	 * <p>Deserializes an NBT data structure into an {@link INBTSerializable} class
+	 * instance. Deserialized objects will contain values from the NBT structure for all
+	 * deserialized annotated fields where the corresponding tag is available in the NBT
+	 * structure.</p>
+	 * <p><b>Note:</b> If an NBT tag is not found for a corresponding field of the given
+	 * serializable class, that field will be instantiated as {@code null}.</p>
+	 * 
+	 * @param definition The {@link INBTSerializable} class structure to use for
+	 * deserialization.
+	 * @param data The NBT data structure to deserialize.
+	 * @return A deserialized instance of the given class definition.
+	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
+	 * Java language access control and the underlying field is inaccessible, or if the
+	 * constructor for a serializable class or {@link List} is inaccessible.
+	 * @throws InstantiationException if a serializable or {@link List} class represents
+	 * an abstract class, an interface, an array class, a primitive type, or void; or if the
+	 * class has no nullary constructor; or if the instantiation fails for some other reason.
+	 */
+	public static final <T extends INBTSerializable> T deserialize(Class<T> definition, NBTTagCompound data) throws IllegalAccessException, InstantiationException {
 		T t = definition.newInstance();
 		Field[] df = definition.getDeclaredFields();
 		for (Field f : df) {
@@ -100,6 +146,10 @@ public class NBTSerializer {
 				f.setAccessible(true);
 				String tn = f.getAnnotation(NBTSerialize.class).name();
 				if (tn.equals("")) tn = f.getName();
+				if (!data.hasKey(tn)) {
+					f.set(t, null);
+					continue;
+				}
 				Class<?> fc = f.getType();
 				
 				if      (fc.isAssignableFrom(byte.class))       f.setByte       (t,                         data.getByte(tn));
@@ -143,6 +193,24 @@ public class NBTSerializer {
 		return t;
 	}
 	
+	/**
+	 * <p>Deserializes an NBT list structure into a {@link List} instance</p>
+	 *  
+	 * @param listClass A {@link Class} instance representing the subclass of {@link List}
+	 * that the NBT list structure should be deserialized to.
+	 * @param subclass A {@link Class} instance representing the class of the elements in
+	 * the {@link List} definition.
+	 * @param subtype A {@link Type} instance representing the type of the elements in the
+	 * {@link List} definition.
+	 * @param list The NBT list structure to deserialize.
+	 * @return A deserialized {@link List} instance of the given subclass.
+	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
+	 * Java language access control and the underlying field is inaccessible, or if the
+	 * constructor for a serializable class or {@link List} is inaccessible.
+	 * @throws InstantiationException if a serializable or {@link List} class represents
+	 * an abstract class, an interface, an array class, a primitive type, or void; or if the
+	 * class has no nullary constructor; or if the instantiation fails for some other reason
+	 */
 	private static <T> List<T> deserializeList(Class<?> listClass, Class<T> subclass, Type subtype, NBTTagList list) throws InstantiationException, IllegalAccessException {
 		List<T> c = (List<T>) listClass.newInstance();
 		for (int i = 0; i < list.tagCount(); i++) {
@@ -176,6 +244,12 @@ public class NBTSerializer {
 		return c;
 	}
 	
+	/**
+	 * <p>Returns the NBT tag ID that corresponds to the given Java {@link Class}.
+	 * 
+	 * @param clazz The {@link Class} to match against an NBT tag ID.
+	 * @return An NBT tag ID.
+	 */
 	private static int getIDFromClass(Class<?> clazz) {
 		if (clazz.isAssignableFrom(byte.class) || clazz.isAssignableFrom(Byte.class) ||
 			clazz.isAssignableFrom(boolean.class) || clazz.isAssignableFrom(Boolean.class)) {
