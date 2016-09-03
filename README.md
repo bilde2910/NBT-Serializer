@@ -21,7 +21,11 @@ Classes that may be serialized include `Byte`, `Byte[]`, `Boolean`, `Short`, `In
 Example serialized class:
 
 ```java
-public class Person implements INBTSerializable
+import java.util.ArrayList;
+import java.util.Arrays;
+import info.varden.nbtserial.*;
+
+public class Person implements INBTSerializable {
     
     /* 
      * A default constructor is required for serialization.
@@ -73,4 +77,6 @@ System.out.println(newAlice.hobbies);   // [Skiing, Knitting, Card games]
 System.out.println(newAlice.secret);    // Has a crush on Bob
 ```
 
-It's as easy as that!
+Here's how the above NBT serialized class would look like in a class explorer:
+
+![Alice.nbt viewed in NBTExplorer](https://raw.githubusercontent.com/bilde2910/NBT-Serializer/master/docs/result.png)
