@@ -79,4 +79,4 @@ System.out.println(newAlice.secret);    // Has a crush on Bob
 
 Here's how the above NBT serialized class would look like in an NBT viewer:
 
-![Alice.nbt viewed in NBTExplorer](docs/result.png)
+![Alice.nbt viewed in NBTExplorer](https://raw.githubusercontent.com/bilde2910/NBT-Serializer/master/docs/result.png)
