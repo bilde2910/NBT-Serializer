@@ -1,5 +1,5 @@
 # NBT Serializer
-NBT Serializer is a small Java library for serializing objects to NBT in Java. It requires Minecraft (package net.minecraft.nbt) and Apache Commons Lang (package org.apache.commons.lang3.ArrayUtils) to function.
+NBT Serializer is a small Java library for serializing objects to NBT in Java. It requires Minecraft (package net.minecraft.nbt) and Apache Commons Lang (package org.apache.commons.lang3.ArrayUtils) to function. It is particularly useful when you need to de- and reconstruct objects to/from binary data so that they may be sent over networks or saved to the file system.
 
 ## Why it exists
 I created this serializer in order to save work manually serializing and deserializing certain objects in another Minecraft-related project of mine. Hopefully, the creation of this serializer means I will never have to write any more code to serialize to NBT ever again. I thought this would be a quick fix, but as we all know, it doesn't work that way.
