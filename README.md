@@ -14,7 +14,7 @@ Hopefully, this will also be of use to other developers. That's why I'm posting 
 Simply add the classes from this repository into your own project, and you can access them. If you want to do this, though, I kindly request that you change the package name so that there are no conflicts with other mods that may happen to have an implementation of this project as well.
 
 ## Usage
-To mark a class as serializable, implement the `INBTSerializable` interface on the class. This must be done for every class you want to serialize. Then, on every field in that class that you want to be included in the serialized object, attach the `@NBTSerialize` annotation. You may optionally supply a tag name; default or blank will use the field name. Serializable classes must also have a default or non-parameterized constructor.
+To mark a class as serializable, implement the `INBTSerializable` interface on the class. This must be done for every class you want to serialize. Then, on every field in that class that you want to be included in the serialized object, attach the `@NBTSerialize` annotation. You may optionally supply a tag name; default or blank will use the field name. Serializable classes are recommended to have a nullary constructor, but may choose not to add one. In that case, you need to pass an already constructed instance of the class when you deserialize it, as opposed to just passing a reference to its class.
 
 Classes that may be serialized include `Byte`, `Byte[]`, `Boolean`, `Short`, `Integer`, `Integer[]`, `Long`, `Float`, and `Double`, as well as the primitive equivalents of all these, plus `String`, any subclass of `List`, and other `INBTSerializable` classes.
 
