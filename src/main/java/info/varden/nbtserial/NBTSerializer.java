@@ -114,8 +114,8 @@ public class NBTSerializer {
 				 * Lists and other INBTSerializable objects in the class instance must be
 				 * serialized themselves before they are added to the NBT data structure.
 				 */
-				else if (List.class.isAssignableFrom(fc))                                                   t.setTag(tn, serializeList((List) fv));
 				else if (INBTSerializable.class.isAssignableFrom(fc))                                       t.setTag(tn, serialize((INBTSerializable) fv));
+				else if (List.class.isAssignableFrom(fc))                                                   t.setTag(tn, serializeList((List) fv));
 			}
 		}
 		/*
@@ -174,8 +174,8 @@ public class NBTSerializer {
 			 * Lists and other INBTSerializable objects in the class instance must be
 			 * serialized themselves before they are added to the NBT list structure.
 			 */
-			else if (List.class.isAssignableFrom(subclass))                 c.appendTag(serializeList((List) list.get(i)));
 			else if (INBTSerializable.class.isAssignableFrom(subclass))     c.appendTag(serialize((INBTSerializable) list.get(i)));
+			else if (List.class.isAssignableFrom(subclass))                 c.appendTag(serializeList((List) list.get(i)));
 		}
 		/*
 		 * When serialization is done, return the completed NBT list structure.
@@ -329,7 +329,15 @@ public class NBTSerializer {
 				 * instances. An INBTSerializable instance cannot be assigned to an
 				 * INBTSerializable subclass field.
 				 */
-				else if (List.class.isAssignableFrom(fc)) {
+				else if (INBTSerializable.class.isAssignableFrom(fc)) {
+					/*
+					 * INBTSerializable instances are easy to deserialize, as they can
+					 * just recursively be passed back into this very method.
+					 */
+					NBTTagCompound ntc = data.getCompoundTag(tn);
+					Object c = deserialize((Class<? extends INBTSerializable>) fc, ntc);
+					f.set(instance, c);
+				} else if (List.class.isAssignableFrom(fc)) {
 					/*
 					 * We need to figure out what type the list contains. This is important,
 					 * so that we get the right type object added to the list and so that the
@@ -366,14 +374,6 @@ public class NBTSerializer {
 					 * Finally, the list may be deserialized.
 					 */
 					List<?> c = deserializeList((Class<? extends List>) fc, lct, listType, ntl);
-					f.set(instance, c);
-				} else if (INBTSerializable.class.isAssignableFrom(fc)) {
-					/*
-					 * INBTSerializable instances are much easier to deserialize, as they can
-					 * just recursively be passed back into this very method.
-					 */
-					NBTTagCompound ntc = data.getCompoundTag(tn);
-					Object c = deserialize((Class<? extends INBTSerializable>) fc, ntc);
 					f.set(instance, c);
 				}
 			}
@@ -440,7 +440,14 @@ public class NBTSerializer {
 			 * instances. An INBTSerializable instance cannot be assigned to an
 			 * INBTSerializable subclass field.
 			 */
-			else if (List.class.isAssignableFrom(subclass)) {
+			else if (INBTSerializable.class.isAssignableFrom(subclass)) {
+				/*
+				 * INBTSerializable instances are easy to deserialize, as they can
+				 * just recursively be passed back into the main deserialization function.
+				 */
+				NBTTagCompound ntc = (NBTTagCompound) list.get(i);
+				Object c2 = deserialize((Class<? extends INBTSerializable>) subclass, ntc);
+			} else if (List.class.isAssignableFrom(subclass)) {
 				/*
 				 * We need to figure out what type the list contains. This is important,
 				 * so that we get the right type object added to the list and so that the
@@ -478,13 +485,6 @@ public class NBTSerializer {
 				 */
 				List<?> c2 = deserializeList(subclass, lct, listType, ntl);
 				c.add((T) c2);
-			} else if (INBTSerializable.class.isAssignableFrom(subclass)) {
-				/*
-				 * INBTSerializable instances are much easier to deserialize, as they can
-				 * just recursively be passed back into the main deserialization function.
-				 */
-				NBTTagCompound ntc = (NBTTagCompound) list.get(i);
-				Object c2 = deserialize((Class<? extends INBTSerializable>) subclass, ntc);
 			}
 		}
 		/*
