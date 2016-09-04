@@ -515,6 +515,7 @@ public class NBTSerializer {
 		else if (clazz.isAssignableFrom(byte[].class) || clazz.isAssignableFrom(Byte[].class)) return NBT_TAG_BYTE_ARRAY;
 		else if (clazz.isAssignableFrom(String.class)) return NBT_TAG_STRING;
 		else if (clazz.isAssignableFrom(int[].class) || clazz.isAssignableFrom(Integer[].class)) return NBT_TAG_INT_ARRAY;
+		else if (INBTSerializable.class.isAssignableFrom(clazz)) return NBT_TAG_COMPOUND;
 		else if (List.class.isAssignableFrom(clazz)) return NBT_TAG_LIST;
 		return NBT_TAG_COMPOUND;
 	}
