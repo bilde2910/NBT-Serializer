@@ -16,7 +16,7 @@ Simply add the classes from this repository into your own project, and you can a
 ## Usage
 To mark a class as serializable, implement the `INBTSerializable` interface on the class. This must be done for every class you want to serialize. Then, on every field in that class that you want to be included in the serialized object, attach the `@NBTSerialize` annotation. You may optionally supply a tag name; default or blank will use the field name. Serializable classes are recommended to have a nullary constructor, but may choose not to add one. In that case, you need to pass an already constructed instance of the class when you deserialize it, as opposed to just passing a reference to its class.
 
-Classes that may be serialized include `Byte`, `Byte[]`, `Boolean`, `Short`, `Integer`, `Integer[]`, `Long`, `Float`, and `Double`, as well as the primitive equivalents of all these, plus `String`, any subclass of `List`, and other `INBTSerializable` classes.
+Classes that may be serialized include `Byte`, `Byte[]`, `Boolean`, `Short`, `Integer`, `Integer[]`, `Long`, `Float`, and `Double`, as well as the primitive equivalents of all these, plus `String`, any implementor of `Collection`, `Map`, and other `INBTSerializable` classes.
 
 Example serialized class:
 
