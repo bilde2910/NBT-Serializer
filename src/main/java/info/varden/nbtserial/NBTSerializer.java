@@ -363,7 +363,9 @@ public class NBTSerializer {
 	 * constructor for a serializable class is inaccessible.
 	 * @throws InstantiationException if a serializable class represents an abstract class,
 	 * an interface, an array class, a primitive type, or void; or if the class has no nullary
-	 * constructor; or if the instantiation fails for some other reason.
+	 * constructor; or if the instantiation fails for some other reason. If this exception is
+	 * thrown when deserializing, you should consider specifying the {@code typeOverride}
+	 * field of the {@link NBTSerialize} annotation on the offending field(s).
 	 * @throws UnserializableClassException if an attempt is made to deserialize a class that
 	 * is not natively supported by the serializer and does not implement INBTSerializable.
 	 */
@@ -412,11 +414,17 @@ public class NBTSerializer {
 				 */
 				f.setAccessible(true);
 				/*
-				 * Then, we get the declared class of the field.
+				 * Then, we get the declared class of the field. Override values from
+				 * NBTSerialize will override this.
 				 */
-				Class<?> fc = f.getType();
+				Class<?> fc;
+				Class<?> forceInstantiateAs = f.getAnnotation(NBTSerialize.class).typeOverride();
 				
-				
+				if (forceInstantiateAs.isAssignableFrom(Object.class)) {
+					fc = f.getType();
+				} else {
+					fc = forceInstantiateAs;
+				}
 				
 				/*
 				 * Check the assignability of the field against primitives. If any of these
@@ -477,7 +485,7 @@ public class NBTSerializer {
 		 * assigned to the field (or, in the case of a nested object, added to the parent
 		 * object).
 		 */
-		Collection<T> c = (Collection<T>) colClass.newInstance();
+		Collection<T> c = colClass.newInstance();
 		
 		/*
 		 * For each of the elements in the collection, deserialize the element into an object.
@@ -532,7 +540,7 @@ public class NBTSerializer {
 		 * in the serializable class mandates. This will be passed on and eventually assigned
 		 * to the field (or, in the case of a nested object, added to the parent object).
 		 */
-		Map<K, V> e = (Map<K, V>) mapClass.newInstance();
+		Map<K, V> e = mapClass.newInstance();
 		
 		for (int i = 0; i < map.tagCount(); i++) {
 			/*
