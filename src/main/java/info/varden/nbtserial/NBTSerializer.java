@@ -507,16 +507,16 @@ public class NBTSerializer {
 		if (clazz.isAssignableFrom(byte.class) || clazz.isAssignableFrom(Byte.class) ||
 			clazz.isAssignableFrom(boolean.class) || clazz.isAssignableFrom(Boolean.class)) {
 			return NBT_TAG_BYTE;
-		} else if (clazz.isAssignableFrom(short.class) || clazz.isAssignableFrom(Short.class)) return NBT_TAG_SHORT;
-		else if (clazz.isAssignableFrom(int.class) || clazz.isAssignableFrom(Integer.class)) return NBT_TAG_INT;
-		else if (clazz.isAssignableFrom(long.class) || clazz.isAssignableFrom(Long.class)) return NBT_TAG_LONG;
-		else if (clazz.isAssignableFrom(float.class) || clazz.isAssignableFrom(Float.class)) return NBT_TAG_FLOAT;
-		else if (clazz.isAssignableFrom(double.class) || clazz.isAssignableFrom(Double.class)) return NBT_TAG_DOUBLE;
-		else if (clazz.isAssignableFrom(byte[].class) || clazz.isAssignableFrom(Byte[].class)) return NBT_TAG_BYTE_ARRAY;
-		else if (clazz.isAssignableFrom(String.class)) return NBT_TAG_STRING;
-		else if (clazz.isAssignableFrom(int[].class) || clazz.isAssignableFrom(Integer[].class)) return NBT_TAG_INT_ARRAY;
-		else if (INBTSerializable.class.isAssignableFrom(clazz)) return NBT_TAG_COMPOUND;
-		else if (List.class.isAssignableFrom(clazz)) return NBT_TAG_LIST;
+		} else if (clazz.isAssignableFrom(short.class)              || clazz.isAssignableFrom(Short.class))         return NBT_TAG_SHORT;
+		else if (clazz.isAssignableFrom(int.class)                  || clazz.isAssignableFrom(Integer.class))       return NBT_TAG_INT;
+		else if (clazz.isAssignableFrom(long.class)                 || clazz.isAssignableFrom(Long.class))          return NBT_TAG_LONG;
+		else if (clazz.isAssignableFrom(float.class)                || clazz.isAssignableFrom(Float.class))         return NBT_TAG_FLOAT;
+		else if (clazz.isAssignableFrom(double.class)               || clazz.isAssignableFrom(Double.class))        return NBT_TAG_DOUBLE;
+		else if (clazz.isAssignableFrom(byte[].class)               || clazz.isAssignableFrom(Byte[].class))        return NBT_TAG_BYTE_ARRAY;
+		else if (clazz.isAssignableFrom(String.class))                                                              return NBT_TAG_STRING;
+		else if (clazz.isAssignableFrom(int[].class)                || clazz.isAssignableFrom(Integer[].class))     return NBT_TAG_INT_ARRAY;
+		else if (INBTSerializable.class.isAssignableFrom(clazz))                                                    return NBT_TAG_COMPOUND;
+		else if (List.class.isAssignableFrom(clazz))                                                                return NBT_TAG_LIST;
 		return NBT_TAG_COMPOUND;
 	}
 }
