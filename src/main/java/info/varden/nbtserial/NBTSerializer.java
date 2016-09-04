@@ -1,12 +1,15 @@
 package info.varden.nbtserial;
 
+import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
-import org.apache.commons.lang3.ArrayUtils;
-
+import net.minecraft.nbt.NBTBase;
 import net.minecraft.nbt.NBTTagByte;
 import net.minecraft.nbt.NBTTagByteArray;
 import net.minecraft.nbt.NBTTagCompound;
@@ -18,6 +21,8 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.nbt.NBTTagLong;
 import net.minecraft.nbt.NBTTagShort;
 import net.minecraft.nbt.NBTTagString;
+
+import org.apache.commons.lang3.ArrayUtils;
 
 /**
  * <p>A class for serializing classes to NBT format. Serializable classes must implement {@link INBTSerializable} in
@@ -51,8 +56,10 @@ public class NBTSerializer {
 	 * @return The given instance represented as a serialized NBT data structure.
 	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
 	 * Java language access control and the underlying field is inaccessible.
+	 * @throws UnserializableClassException if an attempt is made to serialize a class that is
+	 * not natively supported by the serializer and does not implement INBTSerializable.
 	 */
-	public static final <T extends INBTSerializable> NBTTagCompound serialize(T object) throws IllegalAccessException {
+	public static final <T extends INBTSerializable> NBTTagCompound serialize(T object) throws IllegalAccessException, UnserializableClassException {
 		/*
 		 * First thing we need to do is create the NBT compound tag that will represent the
 		 * class instance in its serialized form.
@@ -89,33 +96,29 @@ public class NBTSerializer {
 				/*
 				 * Then, we get the declared class of the field.
 				 */
-				Class<?> fc = f.getType();
+				Class fc = f.getType();
 				
 				/*
-				 * Check the assignability of the field against number classes, arrays and
-				 * strings. If any of these match, an NBT tag of the type corresponding to the
-				 * class of the field will be created and added to the NBT data structure with
-				 * the value obtained from the field.
+				 * Check the assignability of the field against primitives. If any of these
+				 * match, an NBT tag of the type corresponding to the primitive will be
+				 * created and added to the NBT data structure with the value obtained from
+				 * the field.
 				 */
-				if      (fc.isAssignableFrom(byte.class)        || fc.isAssignableFrom(Byte.class))         t.setByte(tn, (Byte) fv);
-				else if (fc.isAssignableFrom(boolean.class)     || fc.isAssignableFrom(Boolean.class))      t.setBoolean(tn, (Boolean) fv);
-				else if (fc.isAssignableFrom(short.class)       || fc.isAssignableFrom(Short.class))        t.setShort(tn, (Short) fv);
-				else if (fc.isAssignableFrom(int.class)         || fc.isAssignableFrom(Integer.class))      t.setInteger(tn, (Integer) fv);
-				else if (fc.isAssignableFrom(long.class)        || fc.isAssignableFrom(Long.class))         t.setLong(tn, (Long) fv);
-				else if (fc.isAssignableFrom(float.class)       || fc.isAssignableFrom(Float.class))        t.setFloat(tn, (Float) fv);
-				else if (fc.isAssignableFrom(double.class)      || fc.isAssignableFrom(Double.class))       t.setDouble(tn, (Double) fv);
-				else if (fc.isAssignableFrom(byte[].class))                                                 t.setByteArray(tn, (byte[]) fv);
-				else if (fc.isAssignableFrom(Byte[].class))                                                 t.setByteArray(tn, ArrayUtils.toPrimitive((Byte[]) fv));
-				else if (fc.isAssignableFrom(String.class))                                                 t.setString(tn, (String) fv);
-				else if (fc.isAssignableFrom(int[].class))                                                  t.setIntArray(tn, (int[]) fv);
-				else if (fc.isAssignableFrom(Integer[].class))                                              t.setIntArray(tn, ArrayUtils.toPrimitive((Integer[]) fv));
-
+				if      (fc.isAssignableFrom(byte.class))       t.setByte(tn, (Byte) fv);
+				else if (fc.isAssignableFrom(boolean.class))    t.setBoolean(tn, (Boolean) fv);
+				else if (fc.isAssignableFrom(short.class))      t.setShort(tn, (Short) fv);
+				else if (fc.isAssignableFrom(int.class))        t.setInteger(tn, (Integer) fv);
+				else if (fc.isAssignableFrom(long.class))       t.setLong(tn, (Long) fv);
+				else if (fc.isAssignableFrom(float.class))      t.setFloat(tn, (Float) fv);
+				else if (fc.isAssignableFrom(double.class))     t.setDouble(tn, (Double) fv);
+				
 				/*
-				 * Lists and other INBTSerializable objects in the class instance must be
-				 * serialized themselves before they are added to the NBT data structure.
+				 * Then, check the assignability of the field against number classes, arrays
+				 * and strings. If any of these match, an NBT tag of the type corresponding to
+				 * the class of the field will be created and added to the NBT data structure
+				 * with the value obtained from the field.
 				 */
-				else if (INBTSerializable.class.isAssignableFrom(fc))                                       t.setTag(tn, serialize((INBTSerializable) fv));
-				else if (List.class.isAssignableFrom(fc))                                                   t.setTag(tn, serializeList((List) fv));
+				else t.setTag(tn, objectToTag(fc, fv));
 			}
 		}
 		/*
@@ -125,62 +128,178 @@ public class NBTSerializer {
 	}
 	
 	/**
-	 * <p>Serializes the given {@link List} instance to an NBT list structure.</p>
+	 * <p>Serializes the given {@link Collection} instance to an NBT list structure.</p>
 	 * 
-	 * @param list A {@link List} instance.
+	 * @param col A {@link Collection} instance.
 	 * @return The given instance represented as a serialized NBT list structure.
 	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
 	 * Java language access control and the underlying field is inaccessible.
+	 * @throws UnserializableClassException if an attempt is made to serialize a class that is
+	 * not natively supported by the serializer and does not implement INBTSerializable.
 	 */
-	private static <T> NBTTagList serializeList(List<T> list) throws IllegalAccessException {
+	private static final <T> NBTTagList serializeCollection(Collection<T> col) throws IllegalAccessException, UnserializableClassException {
 		/*
 		 * First of all, create a blank NBT list tag to store our values. Unlike Java, NBT has
 		 * only one one type of list, namely NBTTagList. Java has different implementations of
-		 * List (e.g. ArrayList, LinkedList, etc.), which makes deserialization significantly
-		 * harder than serialization.
+		 * Collection (e.g. ArrayList, LinkedList, Set, etc.), which makes deserialization
+		 * significantly harder than serialization.
 		 */
 		NBTTagList c = new NBTTagList();
 		/*
-		 * We don't know what kind of elements the list contains, and instead of using
+		 * We don't know what kind of elements the collection contains, and instead of using
 		 * reflection sorcery (http://stackoverflow.com/a/14403515/1955334) to figure it out,
-		 * it's much easier and more more logical to just check the class of the first element
-		 * of the list. This obviously doesn't work if the list is empty. However, if that's
-		 * the case, we can just return an empty list tag - the NBT implementation doesn't
-		 * need to know what kind of tags it contains if it's empty. (NBTTagList sets its
-		 * child tag type to 0 (NBT_TAG_END) if it's empty when writing itself to a stream.)
+		 * it's much easier and more more logical to just check the class of any element of
+		 * the collection. This obviously doesn't work if the collection is empty. However, if
+		 * that's the case, we can just return an empty list tag - the NBT implementation
+		 * doesn't need to know what kind of tags it contains if it's empty. (NBTTagList sets
+		 * its child tag type to 0 (NBT_TAG_END) if it's empty when writing itself to a
+		 * stream.)
 		 */
-		if (list.size() <= 0) return c;
-		Class<?> subclass = list.get(0).getClass();
+		if (col.size() <= 0) return c;
+		Class<T> subclass = (Class<T>) col.iterator().next().getClass();
 		
-		for (int i = 0; i < list.size(); i++) {
+		for (T element : col) {
 			/*
-			 * Check the assignability of the class against number classes, arrays and strings. If
-			 * any of these match, an NBT tag of the type corresponding to the class of the field
-			 * will be created and added to the NBT list structure with the value obtained from
-			 * the field.
+			 * Get a tag that represents this element in the list as an NBT tag.
 			 */
-			if      (subclass.isAssignableFrom(Byte.class))                 c.appendTag(new NBTTagByte((Byte) list.get(i)));
-			else if (subclass.isAssignableFrom(Boolean.class))              c.appendTag(new NBTTagByte(((Boolean) list.get(i)) ? (byte) 1 : (byte) 0));
-			else if (subclass.isAssignableFrom(Short.class))                c.appendTag(new NBTTagShort((Short) list.get(i)));
-			else if (subclass.isAssignableFrom(Integer.class))              c.appendTag(new NBTTagInt((Integer) list.get(i)));
-			else if (subclass.isAssignableFrom(Long.class))                 c.appendTag(new NBTTagLong((Long) list.get(i)));
-			else if (subclass.isAssignableFrom(Float.class))                c.appendTag(new NBTTagFloat((Float) list.get(i)));
-			else if (subclass.isAssignableFrom(Double.class))               c.appendTag(new NBTTagDouble((Double) list.get(i)));
-			else if (subclass.isAssignableFrom(Byte[].class))               c.appendTag(new NBTTagByteArray(ArrayUtils.toPrimitive((Byte[]) list.get(i))));
-			else if (subclass.isAssignableFrom(String.class))               c.appendTag(new NBTTagString((String) list.get(i)));
-			else if (subclass.isAssignableFrom(Integer[].class))            c.appendTag(new NBTTagIntArray(ArrayUtils.toPrimitive((Integer[]) list.get(i))));
-
-			/*
-			 * Lists and other INBTSerializable objects in the class instance must be
-			 * serialized themselves before they are added to the NBT list structure.
-			 */
-			else if (INBTSerializable.class.isAssignableFrom(subclass))     c.appendTag(serialize((INBTSerializable) list.get(i)));
-			else if (List.class.isAssignableFrom(subclass))                 c.appendTag(serializeList((List) list.get(i)));
+			NBTBase tag = objectToTag(subclass, element);
+			if (tag != null) {
+				/*
+				 * If a suitable tag type was found and a tag was created for the list
+				 * element, add the element to the NBT list structure.
+				 */
+				c.appendTag(tag);
+			}
 		}
 		/*
 		 * When serialization is done, return the completed NBT list structure.
 		 */
 		return c;
+	}
+	
+	/**
+	 * <p>Serializes the given {@link Entry} instance to an NBT data structure.</p>
+	 * 
+	 * @param entry An {@link Entry} instance.
+	 * @return The given instance represented as a serialized NBT entry list structure.
+	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
+	 * Java language access control and the underlying field is inaccessible.
+	 * @throws UnserializableClassException if an attempt is made to serialize a class that is
+	 * not natively supported by the serializer and does not implement INBTSerializable.
+	 */
+	private static final <K, V> NBTTagCompound serializeEntry(Entry<K, V> entry) throws UnserializableClassException, IllegalAccessException {
+		/*
+		 * We don't know what kind of elements the key/value pair contains, and instead of
+		 * using reflection sorcery (http://stackoverflow.com/a/14403515/1955334) to figure it
+		 * out, it's much easier and more more logical to just check the class of the key and
+		 * value of the entry.
+		 */
+		Class<K> keyClass = (Class<K>) entry.getKey().getClass();
+		Class<V> valueClass = (Class<V>) entry.getValue().getClass();
+		
+		/*
+		 * Pass this info on to the main entry serialization function, then return the
+		 * completed NBT map structure.
+		 */
+		return serializeEntry(entry, keyClass, valueClass);
+	}
+	
+	/**
+	 * <p>Serializes the given {@link Entry} instance to an NBT data structure, forcing the
+	 * key and value to be serialized as if they were instances of the given classes.</p>
+	 * 
+	 * @param entry An {@link Entry} instance.
+	 * @param keyClass The class or a superclass of the entry key.
+	 * @param valueClass The class or a superclass of the entry value.
+	 * @return The given instance represented as a serialized NBT entry list structure.
+	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
+	 * Java language access control and the underlying field is inaccessible.
+	 * @throws UnserializableClassException if an attempt is made to serialize a class that is
+	 * not natively supported by the serializer and does not implement INBTSerializable.
+	 */
+	private static final <K, V> NBTTagCompound serializeEntry(Entry<? extends K, ? extends V> entry, Class<K> keyClass, Class<V> valueClass) throws IllegalAccessException, UnserializableClassException {
+		/*
+		 * First of all, create a blank NBT compound tag to store our key/value pair. The
+		 * child tags of this compound will contain the key and value of the pair.
+		 */
+		NBTTagCompound te = new NBTTagCompound();
+		
+		/*
+		 * The key and value will be serialized as long as they are not null. If they are
+		 * null, the respective fragment of the pair will not be serialized, to indicate that
+		 * it is null.
+		 */
+		if (entry.getKey() != null) {
+			NBTBase keyTag = objectToTag(keyClass, entry.getKey());
+			te.setTag("k", keyTag);
+		}
+		if (entry.getValue() != null) {
+			NBTBase valueTag = objectToTag(valueClass, entry.getValue());
+			te.setTag("v", valueTag);
+		}
+		
+		/*
+		 * When serialization is done, return the completed NBT entry structure.
+		 */
+		return te;
+	}
+	
+	/**
+	 * <p>Serializes an object of the specified class into an NBT tag.</p>
+	 * 
+	 * @param clazz A {@link Class} instance representing the class of the object.
+	 * @param obj The object to serialize.
+	 * @return The given object represented as an NBT tag of the appropriate type.
+	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
+	 * Java language access control and the underlying field is inaccessible, or if the
+	 * constructor for a serializable class is inaccessible.
+	 * @throws UnserializableClassException if an attempt is made to deserialize a class that
+	 * is not natively supported by the serializer and does not implement INBTSerializable.
+	 */
+	private static final <T, U extends T> NBTBase objectToTag(Class<T> clazz, U obj) throws IllegalAccessException, UnserializableClassException {
+		/*
+		 * First, check if the object is null. If it is, it should not be cast to a tag, so we
+		 * return null.
+		 */
+		if (obj == null) return null;
+		
+		/*
+		 * Check the assignability of the class against number classes, arrays and strings. If
+		 * any of these match, an NBT tag of the type corresponding to the class of the list
+		 * will be created and added to the NBT list structure with the value obtained from
+		 * the list.
+		 */
+		if      (clazz.isAssignableFrom(Byte.class))                return new NBTTagByte((Byte) obj);
+		else if (clazz.isAssignableFrom(Boolean.class))             return new NBTTagByte(((Boolean) obj) ? (byte) 1 : (byte) 0);
+		else if (clazz.isAssignableFrom(Short.class))               return new NBTTagShort((Short) obj);
+		else if (clazz.isAssignableFrom(Integer.class))             return new NBTTagInt((Integer) obj);
+		else if (clazz.isAssignableFrom(Long.class))                return new NBTTagLong((Long) obj);
+		else if (clazz.isAssignableFrom(Float.class))               return new NBTTagFloat((Float) obj);
+		else if (clazz.isAssignableFrom(Double.class))              return new NBTTagDouble((Double) obj);
+		else if (clazz.isAssignableFrom(byte[].class))              return new NBTTagByteArray((byte[]) obj);
+		else if (clazz.isAssignableFrom(Byte[].class))              return new NBTTagByteArray(ArrayUtils.toPrimitive((Byte[]) obj));
+		else if (clazz.isAssignableFrom(String.class))              return new NBTTagString((String) obj);
+		else if (clazz.isAssignableFrom(int[].class))               return new NBTTagIntArray((int[]) obj);
+		else if (clazz.isAssignableFrom(Integer[].class))           return new NBTTagIntArray(ArrayUtils.toPrimitive((Integer[]) obj));
+		
+		/*
+		 * Lists and other INBTSerializable objects in the class instance must be
+		 * serialized themselves before they are added to the NBT list structure.
+		 */
+		else if (INBTSerializable.class.isAssignableFrom(clazz))    return serialize((INBTSerializable) obj);
+		else if (Collection.class.isAssignableFrom(clazz))          return serializeCollection((Collection) obj);
+		
+		/*
+		 * We will also handle types of objects that are not traditionally supported
+		 * by NBT, such as maps, and non-byte/integer arrays.
+		 */
+		else if (Entry.class.isAssignableFrom(clazz))				return serializeEntry((Entry) obj);
+		else if (Map.class.isAssignableFrom(clazz))                 return serializeCollection(((Map) obj).entrySet());
+		
+		/*
+		 * The object cannot be represented as a tag, so return null.
+		 */
+		else throw new UnserializableClassException(clazz);
 	}
 	
 	/**
@@ -201,8 +320,10 @@ public class NBTSerializer {
 	 * @throws InstantiationException if a serializable or {@link List} class represents
 	 * an abstract class, an interface, an array class, a primitive type, or void; or if the
 	 * class has no nullary constructor; or if the instantiation fails for some other reason.
+	 * @throws UnserializableClassException if an attempt is made to deserialize a class that
+	 * is not natively supported by the serializer and does not implement INBTSerializable.
 	 */
-	public static final <T extends INBTSerializable> T deserialize(Class<T> definition, NBTTagCompound data) throws IllegalAccessException, InstantiationException {
+	public static final <T extends INBTSerializable> T deserialize(Class<T> definition, NBTTagCompound data) throws IllegalAccessException, InstantiationException, UnserializableClassException {
 		/*
 		 * The first thing we need to do is create an instance of the class that we want to
 		 * deserialize to. When using this method, the class MUST have a nullary constructor,
@@ -239,12 +360,14 @@ public class NBTSerializer {
 	 * @return A deserialized instance of the given class definition.
 	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
 	 * Java language access control and the underlying field is inaccessible, or if the
-	 * constructor for a serializable class or {@link List} is inaccessible.
-	 * @throws InstantiationException if a serializable or {@link List} class represents
-	 * an abstract class, an interface, an array class, a primitive type, or void; or if the
-	 * class has no nullary constructor; or if the instantiation fails for some other reason.
+	 * constructor for a serializable class is inaccessible.
+	 * @throws InstantiationException if a serializable class represents an abstract class,
+	 * an interface, an array class, a primitive type, or void; or if the class has no nullary
+	 * constructor; or if the instantiation fails for some other reason.
+	 * @throws UnserializableClassException if an attempt is made to deserialize a class that
+	 * is not natively supported by the serializer and does not implement INBTSerializable.
 	 */
-	public static final <T extends INBTSerializable> void deserialize(T instance, NBTTagCompound data, boolean interpretMissingFieldValuesAsNull) throws IllegalAccessException, InstantiationException {
+	public static final <T extends INBTSerializable> void deserialize(T instance, NBTTagCompound data, boolean interpretMissingFieldValuesAsNull) throws IllegalAccessException, InstantiationException, UnserializableClassException {
 		/*
 		 * First of all, we need to get a list of declared fields in the instance's class. We
 		 * then loop over each of the fields and process any that are annotated with
@@ -293,114 +416,55 @@ public class NBTSerializer {
 				 */
 				Class<?> fc = f.getType();
 				
-				/*
-				 * Check the assignability of the field against number classes, arrays and
-				 * strings. If any of these match, the value of the field will be set to a
-				 * corresponding, valid instance of the class that matches from the NBT
-				 * data structure.
-				 */
-				if      (fc.isAssignableFrom(byte.class))       f.setByte       (instance,                          data.getByte(tn));
-				else if (fc.isAssignableFrom(Byte.class))       f.set           (instance, Byte.valueOf(            data.getByte(tn)));
-				else if (fc.isAssignableFrom(boolean.class))    f.setBoolean    (instance,                          data.getBoolean(tn));
-				else if (fc.isAssignableFrom(Boolean.class))    f.set           (instance, Boolean.valueOf(         data.getBoolean(tn)));
-				else if (fc.isAssignableFrom(short.class))      f.setShort      (instance,                          data.getShort(tn));
-				else if (fc.isAssignableFrom(Short.class))      f.set           (instance, Short.valueOf(           data.getShort(tn)));
-				else if (fc.isAssignableFrom(int.class))        f.setInt        (instance,                          data.getInteger(tn));
-				else if (fc.isAssignableFrom(Integer.class))    f.set           (instance, Integer.valueOf(         data.getInteger(tn)));
-				else if (fc.isAssignableFrom(long.class))       f.setLong       (instance,                          data.getLong(tn));
-				else if (fc.isAssignableFrom(Long.class))       f.set           (instance, Long.valueOf(            data.getLong(tn)));
-				else if (fc.isAssignableFrom(float.class))      f.setFloat      (instance,                          data.getFloat(tn));
-				else if (fc.isAssignableFrom(Float.class))      f.set           (instance, Float.valueOf(           data.getFloat(tn)));
-				else if (fc.isAssignableFrom(double.class))     f.setDouble     (instance,                          data.getDouble(tn));
-				else if (fc.isAssignableFrom(Double.class))     f.set           (instance, Double.valueOf(          data.getDouble(tn)));
-				else if (fc.isAssignableFrom(byte[].class))     f.set           (instance,                          data.getByteArray(tn));
-				else if (fc.isAssignableFrom(Byte[].class))     f.set           (instance, ArrayUtils.toObject(     data.getByteArray(tn)));
-				else if (fc.isAssignableFrom(String.class))     f.set           (instance,                          data.getString(tn));
-				else if (fc.isAssignableFrom(int[].class))      f.set           (instance,                          data.getIntArray(tn));
-				else if (fc.isAssignableFrom(Integer[].class))  f.set           (instance, ArrayUtils.toObject(     data.getIntArray(tn)));
+				
 				
 				/*
-				 * Lists and other serializable classes require special treatment on
-				 * deserialization. Many classes can subclass java.util.List, including user-
-				 * defined ones, so we need to check if a List can be assigned from the field
-				 * type instead of checking if the field can be assigned from List (which it
-				 * in most cases cannot, e.g. if the field is of type ArrayList, you can't
-				 * assign a List instance to it). The same goes for INBTSerializable
-				 * instances. An INBTSerializable instance cannot be assigned to an
-				 * INBTSerializable subclass field.
+				 * Check the assignability of the field against primitives. If any of these
+				 * match, the value of the field will be set to a corresponding, valid
+				 * instance of the primitive that matches from the NBT data structure.
 				 */
-				else if (INBTSerializable.class.isAssignableFrom(fc)) {
-					/*
-					 * INBTSerializable instances are easy to deserialize, as they can
-					 * just recursively be passed back into this very method.
-					 */
-					NBTTagCompound ntc = data.getCompoundTag(tn);
-					Object c = deserialize((Class<? extends INBTSerializable>) fc, ntc);
-					f.set(instance, c);
-				} else if (List.class.isAssignableFrom(fc)) {
-					/*
-					 * We need to figure out what type the list contains. This is important,
-					 * so that we get the right type object added to the list and so that the
-					 * correct type of value is extracted from the NBT list structure.
-					 */
-					Type listType = ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0];
-					/*
-					 * We also need to get a Class instance that corresponds to this Type.
-					 * This is primarily done to be able to directly and explicitly cast
-					 * values obtained from the NBT structure into the type that the List
-					 * holds, but also to be able to look up the correct NBT tag type for
-					 * the given class.
-					 */
-					Class<?> lct;
-					/*
-					 * It may be that the types of the list elements themselves are Lists,
-					 * which are also parameterized. This case must be handled differently
-					 * from non-parameterized types because they cannot be explicitly casted
-					 * to a Class instance. We need to get the raw type from the parameterized
-					 * type, which in turn can be casted to a Class.
-					 */
-					if (listType instanceof ParameterizedType) {
-						lct = (Class<?>) ((ParameterizedType) listType).getRawType();
-					} else {
-						lct = (Class<?>) listType;
-					}
-					/*
-					 * We now need to look up the NBT tag ID that corresponds to the given
-					 * class, so that the right type of NBT list is extracted from the NBT
-					 * data structure.
-					 */
-					NBTTagList ntl = data.getTagList(tn, getIDFromClass(lct));
-					/*
-					 * Finally, the list may be deserialized.
-					 */
-					List<?> c = deserializeList((Class<? extends List>) fc, lct, listType, ntl);
-					f.set(instance, c);
-				}
+				if      (fc.isAssignableFrom(byte.class))       f.setByte       (instance,      data.getByte(tn));
+				else if (fc.isAssignableFrom(boolean.class))    f.setBoolean    (instance,      data.getBoolean(tn));
+				else if (fc.isAssignableFrom(short.class))      f.setShort      (instance,      data.getShort(tn));
+				else if (fc.isAssignableFrom(int.class))        f.setInt        (instance,      data.getInteger(tn));
+				else if (fc.isAssignableFrom(long.class))       f.setLong       (instance,      data.getLong(tn));
+				else if (fc.isAssignableFrom(float.class))      f.setFloat      (instance,      data.getFloat(tn));
+				else if (fc.isAssignableFrom(double.class))     f.setDouble     (instance,      data.getDouble(tn));
+				
+				/*
+				 * Then, check the assignability of the field against number classes, arrays
+				 * and strings. If any of these match, the value of the field will be set to a
+				 * corresponding, valid instance of the class that matches from the NBT data
+				 * structure.
+				 */
+				else f.set(instance, tagToObject(data.getTag(tn), fc, f.getGenericType()));
 			}
 		}
 	}
 	
 	/**
-	 * <p>Deserializes an NBT list structure into a {@link List} instance.</p>
-	 *  
-	 * @param listClass A {@link Class} instance representing the subclass of {@link List}
-	 * that the NBT list structure should be deserialized to.
-	 * @param subclass A {@link Class} instance representing the class of the elements in
-	 * the {@link List} definition.
-	 * @param subtype A {@link Type} instance representing the type of the elements in the
-	 * {@link List} definition.
+	 * <p>Deserializes an NBT list structure into a {@link Collection} instance.</p>
+	 * 
 	 * @param list The NBT list structure to deserialize.
-	 * @return A deserialized {@link List} instance of the given subclass.
+	 * @param colClass A {@link Class} instance representing the subclass of
+	 * {@link Collection} that the NBT list structure should be deserialized to.
+	 * @param subclass A {@link Class} instance representing the class of the elements in
+	 * the {@link Collection} definition.
+	 * @param subtype A {@link Type} instance representing the type of the elements in the
+	 * {@link Collection} definition.
+	 * @return A deserialized {@link Collection} instance of the given subclass.
 	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
 	 * Java language access control and the underlying field is inaccessible, or if the
-	 * constructor for a serializable class or {@link List} is inaccessible.
-	 * @throws InstantiationException if a serializable or {@link List} class represents
-	 * an abstract class, an interface, an array class, a primitive type, or void; or if the
-	 * class has no nullary constructor; or if the instantiation fails for some other reason
+	 * constructor for a serializable class is inaccessible.
+	 * @throws InstantiationException if a serializable class represents an abstract class,
+	 * an interface, an array class, a primitive type, or void; or if the class has no nullary
+	 * constructor; or if the instantiation fails for some other reason.
+	 * @throws UnserializableClassException if an attempt is made to deserialize a class that
+	 * is not natively supported by the serializer and does not implement INBTSerializable.
 	 */
-	private static <T> List<T> deserializeList(Class<?> listClass, Class<T> subclass, Type subtype, NBTTagList list) throws InstantiationException, IllegalAccessException {
+	private static <T> Collection<T> deserializeCollection(NBTTagList list, Class<? extends Collection> colClass, Class<T> subclass, Type subtype) throws InstantiationException, IllegalAccessException, UnserializableClassException {
 		/*
-		 * The reason we need both a Class and a List instance passed to this method is that
+		 * The reason we need both a Class and a List instance when deserializing here is that
 		 * we need to be able to cast objects directly into an instance of the subclass
 		 * specified. A Class instance may be parameterized, but a Type may not be, so passing
 		 * only the Type will not allow us to determine the generic class T. Furthermore, we
@@ -410,87 +474,247 @@ public class NBTSerializer {
 		/*
 		 * The first thing we need to do is create an instance of the List class that the
 		 * field in the serializable class mandates. This will be passed on and eventually
-		 * assigned to the field (or, in the case of nested list, added to a parent list).
+		 * assigned to the field (or, in the case of a nested object, added to the parent
+		 * object).
 		 */
-		List<T> c = (List<T>) listClass.newInstance();
+		Collection<T> c = (Collection<T>) colClass.newInstance();
 		
+		/*
+		 * For each of the elements in the collection, deserialize the element into an object.
+		 * We do not need to separately handle primitives here because primitives cannot be
+		 * used as generics.
+		 */
 		for (int i = 0; i < list.tagCount(); i++) {
-			/*
-			 * Check the assignability of the subclass against number classes, arrays and
-			 * strings. If any of these match, a valid instance of that class will be created
-			 * from an NBT tag of the corresponding type from the NBT list structure.
-			 */
-			if      (subclass.isAssignableFrom(Byte.class))         c.add((T) Byte.valueOf(             ((NBTTagByte) list.get(i))      .getByte()));
-			else if (subclass.isAssignableFrom(Boolean.class))      c.add((T) Boolean.valueOf(          ((NBTTagByte) list.get(i))      .getByte() != 0));
-			else if (subclass.isAssignableFrom(Short.class))        c.add((T) Short.valueOf(            ((NBTTagShort) list.get(i))     .getShort()));
-			else if (subclass.isAssignableFrom(Integer.class))      c.add((T) Integer.valueOf(          ((NBTTagInt) list.get(i))       .getInt()));
-			else if (subclass.isAssignableFrom(Long.class))         c.add((T) Long.valueOf(             ((NBTTagLong) list.get(i))      .getLong()));
-			else if (subclass.isAssignableFrom(Float.class))        c.add((T) Float.valueOf(            ((NBTTagFloat) list.get(i))     .getFloat()));
-			else if (subclass.isAssignableFrom(Double.class))       c.add((T) Double.valueOf(           ((NBTTagDouble) list.get(i))    .getDouble()));
-			else if (subclass.isAssignableFrom(Byte[].class))       c.add((T) ArrayUtils.toObject(      ((NBTTagByteArray) list.get(i)) .getByteArray()));
-			else if (subclass.isAssignableFrom(String.class))       c.add((T)                           ((NBTTagString) list.get(i))    .getString());
-			else if (subclass.isAssignableFrom(Integer[].class))    c.add((T) ArrayUtils.toObject(      ((NBTTagIntArray) list.get(i))  .getIntArray()));
-			/*
-			 * Lists and other serializable classes require special treatment on
-			 * deserialization. Many classes can subclass java.util.List, including user-
-			 * defined ones, so we need to check if a List can be assigned from the field
-			 * type instead of checking if the field can be assigned from List (which it
-			 * in most cases cannot, e.g. if the field is of type ArrayList, you can't
-			 * assign a List instance to it). The same goes for INBTSerializable
-			 * instances. An INBTSerializable instance cannot be assigned to an
-			 * INBTSerializable subclass field.
-			 */
-			else if (INBTSerializable.class.isAssignableFrom(subclass)) {
-				/*
-				 * INBTSerializable instances are easy to deserialize, as they can
-				 * just recursively be passed back into the main deserialization function.
-				 */
-				NBTTagCompound ntc = (NBTTagCompound) list.get(i);
-				Object c2 = deserialize((Class<? extends INBTSerializable>) subclass, ntc);
-			} else if (List.class.isAssignableFrom(subclass)) {
-				/*
-				 * We need to figure out what type the list contains. This is important,
-				 * so that we get the right type object added to the list and so that the
-				 * correct type of value is extracted from the NBT list structure.
-				 */
-				Type listType = ((ParameterizedType) subtype).getActualTypeArguments()[0];
-				/*
-				 * We also need to get a Class instance that corresponds to this Type.
-				 * This is primarily done to be able to directly and explicitly cast
-				 * values obtained from the NBT structure into the type that the List
-				 * holds, but also to be able to look up the correct NBT tag type for
-				 * the given class.
-				 */
-				Class<?> lct;
-				/*
-				 * It may be that the types of the list elements themselves are Lists,
-				 * which are also parameterized. This case must be handled differently
-				 * from non-parameterized types because they cannot be explicitly casted
-				 * to a Class instance. We need to get the raw type from the parameterized
-				 * type, which in turn can be casted to a Class.
-				 */
-				if (listType instanceof ParameterizedType) {
-					lct = (Class<?>) ((ParameterizedType) listType).getRawType();
-				} else {
-					lct = (Class<?>) listType;
-				}
-				/*
-				 * We now need to look up the NBT tag ID that corresponds to the given
-				 * class, so that the right type of NBT list is extracted from the NBT
-				 * data structure.
-				 */
-				NBTTagList ntl = (NBTTagList) list.get(i);
-				/*
-				 * Finally, the list may be deserialized.
-				 */
-				List<?> c2 = deserializeList(subclass, lct, listType, ntl);
-				c.add((T) c2);
-			}
+			c.add(tagToObject(list.get(i), subclass, subtype));
 		}
+		
 		/*
 		 * When deserialization is complete, return the completed list.
 		 */
 		return c;
+	}
+	
+	/**
+	 * <p>Deserializes an NBT entry set structure into a {@link Map} instance.</p>
+	 * 
+	 * @param map The NBT entry set structure to deserialize.
+	 * @param mapClass A {@link Class} instance representing the subclass of
+	 * {@link Map} that the NBT entry set structure should be deserialized to.
+	 * @param keyClass A {@link Class} instance representing the class of the keys in the
+	 * {@link Map} definition.
+	 * @param keyType A {@link Type} instance representing the type of the keys in the
+	 * {@link Map} definition.
+	 * @param valueClass A {@link Class} instance representing the class of the values in the
+	 * {@link Map} definition.
+	 * @param valueType A {@link Type} instance representing the type of the values in the
+	 * {@link Map} definition.
+	 * @return A deserialized {@link Map} instance of the given subclass.
+	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
+	 * Java language access control and the underlying field is inaccessible, or if the
+	 * constructor for a serializable class is inaccessible.
+	 * @throws InstantiationException if a serializable class represents an abstract class,
+	 * an interface, an array class, a primitive type, or void; or if the class has no nullary
+	 * constructor; or if the instantiation fails for some other reason.
+	 * @throws UnserializableClassException if an attempt is made to deserialize a class that
+	 * is not natively supported by the serializer and does not implement INBTSerializable.
+	 */
+	private static <K, V> Map<K, V> deserializeMap(NBTTagList map, Class<? extends Map> mapClass, Class<K> keyClass, Type keyType, Class<V> valueClass, Type valueType) throws InstantiationException, IllegalAccessException, UnserializableClassException {
+		/*
+		 * The reason we need both a Class and a List instance when deserializing here is that
+		 * we need to be able to cast objects directly into an instance of the subclass
+		 * specified. A Class instance may be parameterized, but a Type may not be, so passing
+		 * only the Type will not allow us to determine the generic class T. Furthermore, we
+		 * cannot cast using Class.cast because that method returns an Object instance, not an
+		 * instance of T. T allows us to cast to the subclass explicitly.
+		 */
+		/*
+		 * The first thing we need to do is create an instance of the Map class that the field
+		 * in the serializable class mandates. This will be passed on and eventually assigned
+		 * to the field (or, in the case of a nested object, added to the parent object).
+		 */
+		Map<K, V> e = (Map<K, V>) mapClass.newInstance();
+		
+		for (int i = 0; i < map.tagCount(); i++) {
+			/*
+			 * Deserialize the key and the value into objects. We do not need to separately handle
+			 * primitives here because primitives cannot be used as generics. We need to check if
+			 * the key and/or value is actually present; if not, assign null to the element.
+			 */
+			K key;
+			V value;
+			NBTTagCompound kvp = (NBTTagCompound) map.get(i);
+			
+			if (kvp.hasKey("k")) {
+				key = tagToObject(kvp.getTag("k"), keyClass, keyType);
+			} else {
+				key = null;
+			}
+			if (kvp.hasKey("v")) {
+				value = tagToObject(kvp.getTag("v"), valueClass, valueType);
+			} else {
+				value = null;
+			}
+			
+			/*
+			 * Put the data into the map instance.
+			 */
+			e.put(key, value);
+		}
+		
+		/*
+		 * When deserialization is complete, return the completed map.
+		 */
+		return e;
+	}
+	
+	/**
+	 * <p>Deserializes an NBT tag into an object instance of the specified class.</p>
+	 * 
+	 * @param tag The NBT tag to deserialize.
+	 * @param clazz A {@link Class} instance representing the class of the deserialized object.
+	 * @param subtype A {@link Type} instance representing the type of the deserialized object.
+	 * @return The given NBT tag represented as an object of the given type.
+	 * @throws IllegalAccessException if a Field object in a serializable class is enforcing
+	 * Java language access control and the underlying field is inaccessible, or if the
+	 * constructor for a serializable class is inaccessible.
+	 * @throws InstantiationException if a serializable class represents an abstract class,
+	 * an interface, an array class, a primitive type, or void; or if the class has no nullary
+	 * constructor; or if the instantiation fails for some other reason.
+	 * @throws UnserializableClassException if an attempt is made to deserialize a class that
+	 * is not natively supported by the serializer and does not implement INBTSerializable.
+	 */
+	private static <T> T tagToObject(NBTBase tag, Class<T> clazz, Type subtype) throws IllegalAccessException, InstantiationException, UnserializableClassException {
+		/*
+		 * Handle special cases: These classes will cause class cast exceptions in most
+		 * circumstances (because they are a superclass or interface of any of the below
+		 * classes). They can't be serialized anyway, so discard them.
+		 */
+		if (   clazz.isAssignableFrom(Object.class)         || clazz.isAssignableFrom(Number.class)
+		 ||    clazz.isAssignableFrom(CharSequence.class)   || clazz.isAssignableFrom(Serializable.class)
+		 ||    clazz.isAssignableFrom(Comparable.class))
+			
+			throw new UnserializableClassException(clazz);
+		/*
+		 * Check the assignability of the subclass against number classes, arrays and
+		 * strings. If any of these match, a valid instance of that class will be created
+		 * from an NBT tag of the corresponding type from the NBT list structure.
+		 */
+		if      (clazz.isAssignableFrom(Byte.class))        return (T) Byte.valueOf(            ((NBTTagByte) tag)      .getByte());
+		else if (clazz.isAssignableFrom(Boolean.class))     return (T) Boolean.valueOf(         ((NBTTagByte) tag)      .getByte() != 0);
+		else if (clazz.isAssignableFrom(Short.class))       return (T) Short.valueOf(           ((NBTTagShort) tag)     .getShort());
+		else if (clazz.isAssignableFrom(Integer.class))     return (T) Integer.valueOf(         ((NBTTagInt) tag)       .getInt());
+		else if (clazz.isAssignableFrom(Long.class))        return (T) Long.valueOf(            ((NBTTagLong) tag)      .getLong());
+		else if (clazz.isAssignableFrom(Float.class))       return (T) Float.valueOf(           ((NBTTagFloat) tag)     .getFloat());
+		else if (clazz.isAssignableFrom(Double.class))      return (T) Double.valueOf(          ((NBTTagDouble) tag)    .getDouble());
+		else if (clazz.isAssignableFrom(byte[].class))      return (T)                          ((NBTTagByteArray) tag) .getByteArray();
+		else if (clazz.isAssignableFrom(Byte[].class))      return (T) ArrayUtils.toObject(     ((NBTTagByteArray) tag) .getByteArray());
+		else if (clazz.isAssignableFrom(String.class))      return (T)                          ((NBTTagString) tag)    .getString();
+		else if (clazz.isAssignableFrom(int[].class))       return (T)                          ((NBTTagIntArray) tag)  .getIntArray();
+		else if (clazz.isAssignableFrom(Integer[].class))   return (T) ArrayUtils.toObject(     ((NBTTagIntArray) tag)  .getIntArray());
+		/*
+		 * Lists and other serializable classes require special treatment on
+		 * deserialization. Many classes can subclass java.util.List, including user-
+		 * defined ones, so we need to check if a List can be assigned from the field
+		 * type instead of checking if the field can be assigned from List (which it
+		 * in most cases cannot, e.g. if the field is of type ArrayList, you can't
+		 * assign a List instance to it). The same goes for INBTSerializable
+		 * instances. An INBTSerializable instance cannot be assigned to an
+		 * INBTSerializable subclass field.
+		 */
+		else if (INBTSerializable.class.isAssignableFrom(clazz)) {
+			/*
+			 * INBTSerializable instances are easy to deserialize, as they can
+			 * just recursively be passed back into the main deserialization function.
+			 */
+			NBTTagCompound ntc = (NBTTagCompound) tag;
+			return (T) deserialize((Class<? extends INBTSerializable>) clazz, ntc);
+		} else if (Collection.class.isAssignableFrom(clazz)) {
+			/*
+			 * We need to figure out what type the list contains. This is important,
+			 * so that we get the right type object added to the list and so that the
+			 * correct type of value is extracted from the NBT list structure.
+			 */
+			Type listType = ((ParameterizedType) subtype).getActualTypeArguments()[0];
+			/*
+			 * We also need to get a Class instance that corresponds to this Type.
+			 * This is primarily done to be able to directly and explicitly cast
+			 * values obtained from the NBT structure into the type that the List
+			 * holds, but also to be able to look up the correct NBT tag type for
+			 * the given class.
+			 */
+			Class<?> lct;
+			/*
+			 * It may be that the types of the list elements themselves are
+			 * parameterized. This case must be handled differently from non-
+			 * parameterized types because they cannot be explicitly casted to Class
+			 * instances. We need to get the raw type from the parameterized type,
+			 * which in turn can be casted to a Class.
+			 */
+			if (listType instanceof ParameterizedType) {
+				lct = (Class<?>) ((ParameterizedType) listType).getRawType();
+			} else {
+				lct = (Class<?>) listType;
+			}
+			/*
+			 * Then, cast the list element that contains the collection.
+			 */
+			NBTTagList ntl = (NBTTagList) tag;
+			/*
+			 * Finally, the list may be deserialized.
+			 */
+			Collection c2 = deserializeCollection(ntl, (Class<? extends Collection>) clazz, lct, listType);
+			return (T) c2;
+		} else if (Map.class.isAssignableFrom(clazz)) {
+			/*
+			 * We need to figure out the type of both the key and the value of the entry.
+			 * This is important, so that we get the right type of objects as the key and
+			 * value of the key/value pair and so that the correct type of value is extracted
+			 * from the NBT entry structure.
+			 */
+			Type[] types = ((ParameterizedType) subtype).getActualTypeArguments();
+			Type keyType = types[0];
+			Type valueType = types[1];
+			/*
+			 * We also need to get a Class instance that corresponds to these Types.
+			 * This is primarily done to be able to directly and explicitly cast
+			 * values obtained from the NBT structure into the types that the Map
+			 * holds, but also to be able to look up the correct NBT tag types for
+			 * the given classes.
+			 */
+			Class<?> keyClass;
+			Class<?> valueClass;
+			/*
+			 * It may be that the keys and values of the map elements themselves are
+			 * parameterized. This case must be handled differently from non-
+			 * parameterized types because they cannot be explicitly casted to Class
+			 * instances. We need to get the raw types from the parameterized types,
+			 * which in turn can be casted to Class instances.
+			 */
+			if (keyType instanceof ParameterizedType) {
+				keyClass = (Class<?>) ((ParameterizedType) keyType).getRawType();
+			} else {
+				keyClass = (Class<?>) keyType;
+			}
+			if (valueType instanceof ParameterizedType) {
+				valueClass = (Class<?>) ((ParameterizedType) valueType).getRawType();
+			} else {
+				valueClass = (Class<?>) valueType;
+			}
+			
+			/*
+			 * Then, cast the list element that contains the map.
+			 */
+			NBTTagList ntl = (NBTTagList) tag;
+			/*
+			 * Finally, the map may be deserialized.
+			 */
+			Map c2 = deserializeMap(ntl, (Class<? extends Map>) clazz, keyClass, keyType, valueClass, valueType);
+			return (T) c2;
+		}
+		/*
+		 * The object cannot be represented as a tag, so return null.
+		 */
+		else throw new UnserializableClassException(clazz);
 	}
 	
 	/**
@@ -516,7 +740,7 @@ public class NBTSerializer {
 		else if (clazz.isAssignableFrom(String.class))                                                              return NBT_TAG_STRING;
 		else if (clazz.isAssignableFrom(int[].class)                || clazz.isAssignableFrom(Integer[].class))     return NBT_TAG_INT_ARRAY;
 		else if (INBTSerializable.class.isAssignableFrom(clazz))                                                    return NBT_TAG_COMPOUND;
-		else if (List.class.isAssignableFrom(clazz))                                                                return NBT_TAG_LIST;
+		else if (Collection.class.isAssignableFrom(clazz)           || Map.class.isAssignableFrom(clazz))           return NBT_TAG_LIST;
 		return NBT_TAG_COMPOUND;
 	}
 }
